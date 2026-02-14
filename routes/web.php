@@ -3,13 +3,34 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\Movement;
 use App\Models\User;
 use App\Http\Controllers\ProfileController;
 
-// 1. Accueil : Redirection vers le Dashboard pour éviter l'erreur "view welcome not found"
+// ==========================================================
+// 0. ROUTE DE SECOURS (À SUPPRIMER APRÈS CONNEXION)
+// Accède à : https://gestion-stock-49c5.onrender.com/force-register
+// ==========================================================
+Route::get('/force-register', function () {
+    try {
+        $user = User::updateOrCreate(
+            ['email' => 'admin@gmail.com'], // Évite les doublons si tu rafraîchis la page
+            [
+                'name' => 'Administrateur',
+                'password' => Hash::make('password123'),
+                'role' => 'admin',
+            ]
+        );
+        return "Succès ! L'utilisateur " . $user->email . " est prêt. <a href='/login'>Se connecter ici</a>";
+    } catch (\Exception $e) {
+        return "Erreur lors de la création : " . $e->getMessage();
+    }
+});
+
+// 1. Accueil : Redirection vers le Dashboard
 Route::get('/', function () {
     return redirect()->route('dashboard');
 });
