@@ -10,35 +10,75 @@ use App\Models\Movement;
 use App\Models\User;
 use App\Http\Controllers\ProfileController;
 
-// ==========================================================
-// 0. ROUTE DE SECOURS (À SUPPRIMER APRÈS CONNEXION)
-// Accède à : https://gestion-stock-49c5.onrender.com/force-register
-// ==========================================================
+/*
+|--------------------------------------------------------------------------
+| 0. ROUTE DE SECOURS (Création des 3 profils de test)
+|--------------------------------------------------------------------------
+| Accède à : https://gestion-stock-49c5.onrender.com/force-register
+*/
 Route::get('/force-register', function () {
     try {
-        $user = User::updateOrCreate(
-            ['email' => 'admin@gmail.com'], // Évite les doublons si tu rafraîchis la page
+        // 1. L'ADMINISTRATEUR
+        $admin = User::updateOrCreate(
+            ['email' => 'admin@gmail.com'],
             [
                 'name' => 'Administrateur',
                 'password' => Hash::make('password123'),
                 'role' => 'admin',
             ]
         );
-        return "Succès ! L'utilisateur " . $user->email . " est prêt. <a href='/login'>Se connecter ici</a>";
+
+        // 2. L'OBSERVATEUR
+        $observateur = User::updateOrCreate(
+            ['email' => 'obs@gmail.com'],
+            [
+                'name' => 'Jean Observateur',
+                'password' => Hash::make('password123'),
+                'role' => 'observateur',
+            ]
+        );
+
+        // 3. LE GESTIONNAIRE
+        $gestionnaire = User::updateOrCreate(
+            ['email' => 'stock@gmail.com'],
+            [
+                'name' => 'Marie Gestionnaire',
+                'password' => Hash::make('password123'),
+                'role' => 'gestionnaire',
+            ]
+        );
+
+        return "<h3>Succès ! Les comptes sont créés :</h3>" . 
+               "<ul>" .
+               "<li><b>Admin :</b> admin@gmail.com</li>" .
+               "<li><b>Observateur :</b> obs@gmail.com</li>" .
+               "<li><b>Gestionnaire :</b> stock@gmail.com</li>" .
+               "</ul>" .
+               "<p>Mot de passe commun : <b>password123</b></p>" .
+               "<a href='/login'>Aller à la page de connexion</a>";
+
     } catch (\Exception $e) {
         return "Erreur lors de la création : " . $e->getMessage();
     }
 });
 
-// 1. Accueil : Redirection vers le Dashboard
+/*
+|--------------------------------------------------------------------------
+| 1. ACCUEIL ET REDIRECTION
+|--------------------------------------------------------------------------
+*/
 Route::get('/', function () {
     return redirect()->route('dashboard');
 });
 
-// 2. Routes protégées (Authentification requise)
+/*
+|--------------------------------------------------------------------------
+| 2. ROUTES PROTÉGÉES (AUTH REQUIS)
+|--------------------------------------------------------------------------
+*/
 Route::middleware(['auth', 'verified'])->group(function () {
 
-    // --- DASHBOARD (Statistiques) ---
+    // --- DASHBOARD ---
     Route::get('/dashboard', function () {
         $totalProduits = Product::count();
         $valeurStock = Product::sum(DB::raw('price * quantity'));
@@ -49,107 +89,114 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('dashboard');
 
     // --- PRODUITS ---
-    Route::get('/products', function () {
-        return view('products.index', ['products' => Product::with('category')->get()]);
-    })->name('products.index');
+    Route::prefix('products')->name('products.')->group(function () {
+        Route::get('/', function () {
+            return view('products.index', ['products' => Product::with('category')->get()]);
+        })->name('index');
 
-    Route::get('/products/create', function () {
-        return view('products.create', ['categories' => Category::all()]);
-    })->name('products.create');
+        Route::get('/create', function () {
+            return view('products.create', ['categories' => Category::all()]);
+        })->name('create');
 
-    Route::post('/products', function (Request $request) {
-        Product::create($request->all());
-        return redirect()->route('products.index')->with('success', 'Produit ajouté.');
-    })->name('products.store');
+        Route::post('/', function (Request $request) {
+            Product::create($request->all());
+            return redirect()->route('products.index')->with('success', 'Produit ajouté.');
+        })->name('store');
 
-    Route::get('/products/{product}/edit', function (Product $product) {
-        return view('products.edit', ['product' => $product, 'categories' => Category::all()]);
-    })->name('products.edit');
+        Route::get('/{product}/edit', function (Product $product) {
+            return view('products.edit', ['product' => $product, 'categories' => Category::all()]);
+        })->name('edit');
 
-    Route::put('/products/{product}', function (Request $request, Product $product) {
-        $product->update($request->all());
-        return redirect()->route('products.index')->with('success', 'Produit mis à jour.');
-    })->name('products.update');
+        Route::put('/{product}', function (Request $request, Product $product) {
+            $product->update($request->all());
+            return redirect()->route('products.index')->with('success', 'Produit mis à jour.');
+        })->name('update');
 
-    Route::delete('/products/{product}', function (Product $product) {
-        $product->delete();
-        return redirect()->route('products.index')->with('success', 'Produit supprimé.');
-    })->name('products.destroy');
+        Route::delete('/{product}', function (Product $product) {
+            $product->delete();
+            return redirect()->route('products.index')->with('success', 'Produit supprimé.');
+        })->name('destroy');
+    });
 
     // --- CATÉGORIES ---
-    Route::get('/categories', function () {
-        return view('categories.index', ['categories' => Category::all()]);
-    })->name('categories.index');
+    Route::prefix('categories')->name('categories.')->group(function () {
+        Route::get('/', function () {
+            return view('categories.index', ['categories' => Category::all()]);
+        })->name('index');
 
-    Route::get('/categories/create', function () {
-        return view('categories.create');
-    })->name('categories.create');
+        Route::get('/create', function () {
+            return view('categories.create');
+        })->name('create');
 
-    Route::post('/categories', function (Request $request) {
-        Category::create($request->all());
-        return redirect()->route('categories.index')->with('success', 'Catégorie créée.');
-    })->name('categories.store');
+        Route::post('/', function (Request $request) {
+            Category::create($request->all());
+            return redirect()->route('categories.index')->with('success', 'Catégorie créée.');
+        })->name('store');
 
-    Route::get('/categories/{category}/edit', function (Category $category) {
-        return view('categories.edit', compact('category'));
-    })->name('categories.edit');
+        Route::get('/{category}/edit', function (Category $category) {
+            return view('categories.edit', compact('category'));
+        })->name('edit');
 
-    Route::put('/categories/{category}', function (Request $request, Category $category) {
-        $category->update($request->all());
-        return redirect()->route('categories.index')->with('success', 'Catégorie mise à jour.');
-    })->name('categories.update');
+        Route::put('/{category}', function (Request $request, Category $category) {
+            $category->update($request->all());
+            return redirect()->route('categories.index')->with('success', 'Catégorie mise à jour.');
+        })->name('update');
 
-    Route::delete('/categories/{category}', function (Category $category) {
-        $category->delete();
-        return redirect()->route('categories.index')->with('success', 'Catégorie supprimée.');
-    })->name('categories.destroy');
+        Route::delete('/{category}', function (Category $category) {
+            $category->delete();
+            return redirect()->route('categories.index')->with('success', 'Catégorie supprimée.');
+        })->name('destroy');
+    });
 
-    // --- UTILISATEURS ---
-    Route::get('/users', function () {
-        return view('users.index', ['users' => User::all()]);
-    })->name('users.index');
+    // --- UTILISATEURS (Gestion des rôles) ---
+    Route::prefix('users')->name('users.')->group(function () {
+        Route::get('/', function () {
+            return view('users.index', ['users' => User::all()]);
+        })->name('index');
 
-    Route::patch('/users/{user}/role', function (Request $request, User $user) {
-        $user->update(['role' => $request->role]);
-        return redirect()->route('users.index')->with('success', 'Rôle mis à jour.');
-    })->name('users.updateRole');
+        Route::patch('/{user}/role', function (Request $request, User $user) {
+            $user->update(['role' => $request->role]);
+            return redirect()->route('users.index')->with('success', 'Rôle mis à jour.');
+        })->name('updateRole');
 
-    Route::delete('/users/{user}', function (User $user) {
-        if ($user->id !== auth()->id()) {
-            $user->delete();
-        }
-        return redirect()->route('users.index')->with('success', 'Utilisateur supprimé.');
-    })->name('users.destroy');
+        Route::delete('/{user}', function (User $user) {
+            if ($user->id !== auth()->id()) {
+                $user->delete();
+            }
+            return redirect()->route('users.index')->with('success', 'Utilisateur supprimé.');
+        })->name('destroy');
+    });
 
-    // --- MOUVEMENTS ---
-    Route::get('/movements', function () {
-        return view('movements.index', ['movements' => Movement::with(['product', 'user'])->latest()->get()]);
-    })->name('movements.index');
+    // --- MOUVEMENTS DE STOCK ---
+    Route::prefix('movements')->name('movements.')->group(function () {
+        Route::get('/', function () {
+            return view('movements.index', ['movements' => Movement::with(['product', 'user'])->latest()->get()]);
+        })->name('index');
 
-    Route::get('/movements/create', function () {
-        return view('movements.create', ['products' => Product::all()]);
-    })->name('movements.create');
+        Route::get('/create', function () {
+            return view('movements.create', ['products' => Product::all()]);
+        })->name('create');
 
-    Route::post('/movements', function (Request $request) {
-        Movement::create([
-            'product_id' => $request->product_id,
-            'user_id' => auth()->id(),
-            'type' => $request->type,
-            'quantity' => $request->quantity,
-        ]);
+        Route::post('/', function (Request $request) {
+            Movement::create([
+                'product_id' => $request->product_id,
+                'user_id' => auth()->id(),
+                'type' => $request->type,
+                'quantity' => $request->quantity,
+            ]);
 
-        $product = Product::find($request->product_id);
-        if($request->type == 'in') { $product->increment('quantity', $request->quantity); }
-        else { $product->decrement('quantity', $request->quantity); }
+            $product = Product::find($request->product_id);
+            if($request->type == 'in') { $product->increment('quantity', $request->quantity); }
+            else { $product->decrement('quantity', $request->quantity); }
 
-        return redirect()->route('movements.index')->with('success', 'Stock mis à jour.');
-    })->name('movements.store');
+            return redirect()->route('movements.index')->with('success', 'Stock mis à jour.');
+        })->name('store');
+    });
 
-    // --- EXPORTATION CSV ---
+    // --- EXPORTATION ---
     Route::get('/export', function () {
         $products = Product::with('category')->get();
         $fileName = 'export_inventaire_' . date('d-m-Y') . '.csv';
-
         $headers = [
             "Content-type"        => "text/csv",
             "Content-Disposition" => "attachment; filename=$fileName",
@@ -157,7 +204,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
             "Expires"             => "0"
         ];
-
         $callback = function() use($products) {
             $file = fopen('php://output', 'w');
             fputcsv($file, ['ID', 'Nom', 'Categorie', 'Prix', 'Quantite', 'Valeur Totale']);
@@ -170,9 +216,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('export.index');
 
     // --- PROFIL ---
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::controller(ProfileController::class)->group(function () {
+        Route::get('/profile', 'edit')->name('profile.edit');
+        Route::patch('/profile', 'update')->name('profile.update');
+        Route::delete('/profile', 'destroy')->name('profile.destroy');
+    });
 });
 
 require __DIR__.'/auth.php';
