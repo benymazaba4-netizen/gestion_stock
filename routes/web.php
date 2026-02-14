@@ -3,64 +3,11 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\Movement;
 use App\Models\User;
 use App\Http\Controllers\ProfileController;
-
-/*
-|--------------------------------------------------------------------------
-| 0. ROUTE DE SECOURS (Création des 3 profils de test)
-|--------------------------------------------------------------------------
-| Accède à : https://gestion-stock-49c5.onrender.com/force-register
-*/
-Route::get('/force-register', function () {
-    try {
-        // 1. L'ADMINISTRATEUR
-        $admin = User::updateOrCreate(
-            ['email' => 'admin@gmail.com'],
-            [
-                'name' => 'Administrateur',
-                'password' => Hash::make('password123'),
-                'role' => 'admin',
-            ]
-        );
-
-        // 2. L'OBSERVATEUR
-        $observateur = User::updateOrCreate(
-            ['email' => 'obs@gmail.com'],
-            [
-                'name' => 'Jean Observateur',
-                'password' => Hash::make('password123'),
-                'role' => 'observateur',
-            ]
-        );
-
-        // 3. LE GESTIONNAIRE
-        $gestionnaire = User::updateOrCreate(
-            ['email' => 'stock@gmail.com'],
-            [
-                'name' => 'Marie Gestionnaire',
-                'password' => Hash::make('password123'),
-                'role' => 'gestionnaire',
-            ]
-        );
-
-        return "<h3>Succès ! Les comptes sont créés :</h3>" . 
-               "<ul>" .
-               "<li><b>Admin :</b> admin@gmail.com</li>" .
-               "<li><b>Observateur :</b> obs@gmail.com</li>" .
-               "<li><b>Gestionnaire :</b> stock@gmail.com</li>" .
-               "</ul>" .
-               "<p>Mot de passe commun : <b>password123</b></p>" .
-               "<a href='/login'>Aller à la page de connexion</a>";
-
-    } catch (\Exception $e) {
-        return "Erreur lors de la création : " . $e->getMessage();
-    }
-});
 
 /*
 |--------------------------------------------------------------------------
@@ -94,25 +41,34 @@ Route::middleware(['auth', 'verified'])->group(function () {
             return view('products.index', ['products' => Product::with('category')->get()]);
         })->name('index');
 
-        Route::get('/create', function () {
-            return view('products.create', ['categories' => Category::all()]);
-        })->name('create');
+        // Protection : Seuls Admin et Gestionnaire peuvent créer/modifier
+        Route::middleware(['can:manage-stock'])->group(function () {
+            Route::get('/create', function () {
+                if (auth()->user()->role === 'observateur') abort(403);
+                return view('products.create', ['categories' => Category::all()]);
+            })->name('create');
 
-        Route::post('/', function (Request $request) {
-            Product::create($request->all());
-            return redirect()->route('products.index')->with('success', 'Produit ajouté.');
-        })->name('store');
+            Route::post('/', function (Request $request) {
+                if (auth()->user()->role === 'observateur') abort(403);
+                Product::create($request->all());
+                return redirect()->route('products.index')->with('success', 'Produit ajouté.');
+            })->name('store');
 
-        Route::get('/{product}/edit', function (Product $product) {
-            return view('products.edit', ['product' => $product, 'categories' => Category::all()]);
-        })->name('edit');
+            Route::get('/{product}/edit', function (Product $product) {
+                if (auth()->user()->role === 'observateur') abort(403);
+                return view('products.edit', ['product' => $product, 'categories' => Category::all()]);
+            })->name('edit');
 
-        Route::put('/{product}', function (Request $request, Product $product) {
-            $product->update($request->all());
-            return redirect()->route('products.index')->with('success', 'Produit mis à jour.');
-        })->name('update');
+            Route::put('/{product}', function (Request $request, Product $product) {
+                if (auth()->user()->role === 'observateur') abort(403);
+                $product->update($request->all());
+                return redirect()->route('products.index')->with('success', 'Produit mis à jour.');
+            })->name('update');
+        });
 
+        // Seul l'Admin peut supprimer
         Route::delete('/{product}', function (Product $product) {
+            if (auth()->user()->role !== 'admin') abort(403, "Seul l'admin peut supprimer.");
             $product->delete();
             return redirect()->route('products.index')->with('success', 'Produit supprimé.');
         })->name('destroy');
@@ -124,96 +80,38 @@ Route::middleware(['auth', 'verified'])->group(function () {
             return view('categories.index', ['categories' => Category::all()]);
         })->name('index');
 
-        Route::get('/create', function () {
-            return view('categories.create');
-        })->name('create');
+        Route::middleware(['can:manage-stock'])->group(function () {
+            Route::get('/create', function () {
+                if (auth()->user()->role === 'observateur') abort(403);
+                return view('categories.create');
+            })->name('create');
 
-        Route::post('/', function (Request $request) {
-            Category::create($request->all());
-            return redirect()->route('categories.index')->with('success', 'Catégorie créée.');
-        })->name('store');
-
-        Route::get('/{category}/edit', function (Category $category) {
-            return view('categories.edit', compact('category'));
-        })->name('edit');
-
-        Route::put('/{category}', function (Request $request, Category $category) {
-            $category->update($request->all());
-            return redirect()->route('categories.index')->with('success', 'Catégorie mise à jour.');
-        })->name('update');
-
-        Route::delete('/{category}', function (Category $category) {
-            $category->delete();
-            return redirect()->route('categories.index')->with('success', 'Catégorie supprimée.');
-        })->name('destroy');
+            Route::post('/', function (Request $request) {
+                if (auth()->user()->role === 'observateur') abort(403);
+                Category::create($request->all());
+                return redirect()->route('categories.index')->with('success', 'Catégorie créée.');
+            })->name('store');
+        });
     });
 
-    // --- UTILISATEURS (Gestion des rôles) ---
+    // --- UTILISATEURS (ADMIN UNIQUEMENT) ---
     Route::prefix('users')->name('users.')->group(function () {
         Route::get('/', function () {
+            if (auth()->user()->role !== 'admin') abort(403);
             return view('users.index', ['users' => User::all()]);
         })->name('index');
 
         Route::patch('/{user}/role', function (Request $request, User $user) {
+            if (auth()->user()->role !== 'admin') abort(403);
             $user->update(['role' => $request->role]);
             return redirect()->route('users.index')->with('success', 'Rôle mis à jour.');
         })->name('updateRole');
-
-        Route::delete('/{user}', function (User $user) {
-            if ($user->id !== auth()->id()) {
-                $user->delete();
-            }
-            return redirect()->route('users.index')->with('success', 'Utilisateur supprimé.');
-        })->name('destroy');
     });
 
-    // --- MOUVEMENTS DE STOCK ---
-    Route::prefix('movements')->name('movements.')->group(function () {
-        Route::get('/', function () {
-            return view('movements.index', ['movements' => Movement::with(['product', 'user'])->latest()->get()]);
-        })->name('index');
-
-        Route::get('/create', function () {
-            return view('movements.create', ['products' => Product::all()]);
-        })->name('create');
-
-        Route::post('/', function (Request $request) {
-            Movement::create([
-                'product_id' => $request->product_id,
-                'user_id' => auth()->id(),
-                'type' => $request->type,
-                'quantity' => $request->quantity,
-            ]);
-
-            $product = Product::find($request->product_id);
-            if($request->type == 'in') { $product->increment('quantity', $request->quantity); }
-            else { $product->decrement('quantity', $request->quantity); }
-
-            return redirect()->route('movements.index')->with('success', 'Stock mis à jour.');
-        })->name('store');
-    });
-
-    // --- EXPORTATION ---
-    Route::get('/export', function () {
-        $products = Product::with('category')->get();
-        $fileName = 'export_inventaire_' . date('d-m-Y') . '.csv';
-        $headers = [
-            "Content-type"        => "text/csv",
-            "Content-Disposition" => "attachment; filename=$fileName",
-            "Pragma"              => "no-cache",
-            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
-            "Expires"             => "0"
-        ];
-        $callback = function() use($products) {
-            $file = fopen('php://output', 'w');
-            fputcsv($file, ['ID', 'Nom', 'Categorie', 'Prix', 'Quantite', 'Valeur Totale']);
-            foreach ($products as $p) {
-                fputcsv($file, [$p->id, $p->name, $p->category->name ?? 'N/A', $p->price, $p->quantity, $p->price * $p->quantity]);
-            }
-            fclose($file);
-        };
-        return response()->stream($callback, 200, $headers);
-    })->name('export.index');
+    // --- MOUVEMENTS ---
+    Route::get('/movements', function () {
+        return view('movements.index', ['movements' => Movement::with(['product', 'user'])->latest()->get()]);
+    })->name('index');
 
     // --- PROFIL ---
     Route::controller(ProfileController::class)->group(function () {
