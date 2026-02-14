@@ -24,9 +24,12 @@
         </div>
 
         <div class="flex items-center justify-end mt-4 gap-4">
-            <a class="underline text-sm text-indigo-600 hover:text-indigo-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" href="{{ route('register') }}">
-                {{ __('Créer un compte') }}
-            </a>
+            {{-- Cette condition vérifie si la route 'register' existe avant d'afficher le bouton --}}
+            @if (Route::has('register'))
+                <a class="underline text-sm text-indigo-600 hover:text-indigo-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" href="{{ route('register') }}">
+                    {{ __('Créer un compte') }}
+                </a>
+            @endif
 
             <x-primary-button>
                 {{ __('Se connecter') }}
