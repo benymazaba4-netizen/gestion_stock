@@ -15,8 +15,14 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \App\Http\Middleware\RoleMiddleware::class,
         ]);
 
-        // Correction majeure : On force la confiance aux serveurs de Render
+        // Fait confiance au proxy de Render
         $middleware->trustProxies(at: '*');
+
+        // LA MODIF "CHOC" EST ICI :
+        $middleware->validateCsrfTokens(except: [
+            'register',
+            'login',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
